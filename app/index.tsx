@@ -1,6 +1,6 @@
 import { Button, StyleSheet, Text, TextInput, View, Modal, Alert, Platform } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions, BarCodeScanningResult } from 'expo-camera';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 export default function Index() {
   const [camType, setCamType] = useState<CameraType>('back');
@@ -11,6 +11,7 @@ export default function Index() {
   const [product, setProduct] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
   const [debugMsg, setDebugMsg] = useState('');
+  const [scanAttempts, setScanAttempts] = useState(0);
 
   useEffect(() => {
     console.log("Camera permission status:", perm);
@@ -20,23 +21,25 @@ export default function Index() {
     } else {
       console.log("Camera permission already granted");
     }
-
-    if (Platform.OS === 'ios') {
-      console.log("Running on iOS - checking camera configuration");
-    }
   }, [perm]);
 
-  const handleScan = async ({ data, type }: BarCodeScanningResult) => {
-    console.log("Barcode scan detected!", { data, type });
-    setDebugMsg(`Scanned: ${type} - ${data}`);
-    setScanned(true);
-    setCode(data);
+  // Monitor scan attempts for debugging
+  useEffect(() => {
+    if (scanAttempts > 0) {
+      console.log(`Total scan attempts: ${scanAttempts}`);
+    }
+  }, [scanAttempts]);
 
+  // Separate API fetch logic
+  const fetchProductData = useCallback(async (barcode) => {
     try {
-      console.log(`Fetching product data for code: ${data}`);
-      const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${data}.json`);
+      console.log(`Fetching product for barcode: ${barcode}`);
+      setDebugMsg(`Fetching: ${barcode}`);
+
+      const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
       const json = await res.json();
-      console.log("API response status:", json.status);
+
+      console.log('API response status:', json.status);
 
       if (json.status === 1) {
         console.log("Product found:", json.product.product_name);
@@ -57,14 +60,36 @@ export default function Index() {
         ]);
       }
     } catch (err) {
-      console.error("API fetch error:", err);
+      console.error('API fetch error:', err);
       setDebugMsg(`Error: ${err.message}`);
-      Alert.alert("Error", "Error gathering the data.");
+      Alert.alert("Error", `Error gathering data: ${err.message}`);
     }
-  };
+  }, []);
+
+  const handleScan = useCallback((result) => {
+    console.log('SCAN EVENT RECEIVED:', JSON.stringify(result));
+    setScanAttempts(prev => prev + 1);
+
+    const { data, type, bounds, cornerPoints } = result || {};
+
+    setDebugMsg(`Scan attempt: ${type || 'unknown'}`);
+
+    if (!data) {
+      console.warn('Empty or invalid barcode data received');
+      return;
+    }
+
+    console.log(`Valid barcode scanned: ${type} - ${data}`);
+    setDebugMsg(`Scanned: ${type} - ${data}`);
+
+    setScanned(true);
+    setCode(data);
+
+    fetchProductData(data);
+  }, [fetchProductData]);
 
   if (!perm) return <Text>Gathering permissions...</Text>;
-  if (!perm.granted) {
+  if (!perm?.granted) {
     return (
       <View style={styles.center}>
         <Text>Camera permission is required for barcode scanning</Text>
@@ -78,9 +103,7 @@ export default function Index() {
       <CameraView
         style={styles.camera}
         facing={camType}
-        barcodeScannerSettings={{
-          barCodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'qr', 'code39', 'code128']
-        }}
+        barcodeScannerSettings={{}}
         onBarcodeScanned={scanned ? undefined : handleScan}
       />
 
@@ -88,6 +111,9 @@ export default function Index() {
       <View style={styles.debugOverlay}>
         <Text style={styles.debugText}>
           {debugMsg || 'Waiting for barcode...'}
+        </Text>
+        <Text style={styles.debugText}>
+          Scan attempts: {scanAttempts}
         </Text>
         {code && <Text style={styles.debugText}>Last code: {code}</Text>}
       </View>
@@ -97,7 +123,15 @@ export default function Index() {
           title="Flip camera"
           onPress={() => setCamType((t) => (t === 'back' ? 'front' : 'back'))}
         />
-        {scanned && <Button title="Scan again" onPress={() => setScanned(false)} />}
+        {scanned && (
+          <Button
+            title="Scan again"
+            onPress={() => {
+              setScanned(false);
+              setDebugMsg('Ready to scan again');
+            }}
+          />
+        )}
       </View>
 
       <Modal visible={showModal} animationType="slide" transparent>
@@ -133,17 +167,24 @@ export default function Index() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  camera: { flex: 1 },
+  container: {
+    flex: 1
+  },
+  camera: {
+    flex: 1,
+    width: '100%'
+  },
   buttons: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     padding: 10,
+    backgroundColor: '#fff'
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20
   },
   overlay: {
     flex: 1,
@@ -157,6 +198,13 @@ const styles = StyleSheet.create({
     width: '80%',
     borderRadius: 10,
     elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   modalTitle: {
     fontSize: 18,
@@ -176,14 +224,15 @@ const styles = StyleSheet.create({
   },
   debugOverlay: {
     position: 'absolute',
-    top: 40,
+    top: Platform.OS === 'ios' ? 60 : 40,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     padding: 10,
   },
   debugText: {
     color: 'white',
-    fontSize: 12,
+    fontSize: 14,
+    marginBottom: 4
   }
 });
