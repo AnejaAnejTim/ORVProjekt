@@ -23,14 +23,12 @@ export default function Index() {
     }
   }, [perm]);
 
-  // Monitor scan attempts for debugging
   useEffect(() => {
     if (scanAttempts > 0) {
       console.log(`Total scan attempts: ${scanAttempts}`);
     }
   }, [scanAttempts]);
 
-  // Separate API fetch logic
   const fetchProductData = useCallback(async (barcode) => {
     try {
       console.log(`Fetching product for barcode: ${barcode}`);
@@ -66,33 +64,25 @@ export default function Index() {
     }
   }, []);
 
-  // Optimized scan handler for iOS compatibility
   const handleScan = useCallback((result) => {
-    // Log the entire result structure to see what iOS provides
     console.log('SCAN EVENT RECEIVED:', JSON.stringify(result));
     setScanAttempts(prev => prev + 1);
 
-    // Destructure with fallbacks for iOS differences
     const { data, type, bounds, cornerPoints } = result || {};
 
-    // Set debug message right away for feedback
     setDebugMsg(`Scan attempt: ${type || 'unknown'}`);
 
-    // Validate incoming data
     if (!data) {
       console.warn('Empty or invalid barcode data received');
       return;
     }
 
-    // Log valid scan
     console.log(`Valid barcode scanned: ${type} - ${data}`);
     setDebugMsg(`Scanned: ${type} - ${data}`);
 
-    // Only after validating we have data
     setScanned(true);
     setCode(data);
 
-    // Fetch product info
     fetchProductData(data);
   }, [fetchProductData]);
 
@@ -111,15 +101,27 @@ export default function Index() {
       <CameraView
         style={styles.camera}
         facing={camType}
-        // iOS-optimized settings
         barcodeScannerSettings={{
-          barCodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'qr', 'code39', 'code128','itf14'],
-          isGuidanceEnabled: true,
-          isHighlightingEnabled: true,
-          isPinchToZoomEnabled: true
+            barcodeTypes: [
+              'ean13',
+              'ean8',
+              'upc_a',
+              'upc_e',
+              'code39',
+              'code128',
+              'code93',
+              'itf14',
+              'codabar',
+              'qr',
+              'pdf417',
+              'aztec',
+              'datamatrix'
+            ],
+        isGuidanceEnabled: true,
+        isHighlightingEnabled: true,
+        isPinchToZoomEnabled: true
         }}
-        onBarcodeScanned={scanned ? undefined : handleScan}
-      />
+        onBarcodeScanned={scanned ? undefined : handleScan}/>
 
       {/* Debug overlay */}
       <View style={styles.debugOverlay}>
@@ -147,35 +149,6 @@ export default function Index() {
           />
         )}
       </View>
-
-      <Modal visible={showModal} animationType="slide" transparent>
-        <View style={styles.overlay}>
-          <View style={styles.modal}>
-            <Text style={styles.modalTitle}>Is this the correct product?</Text>
-            <TextInput
-              style={styles.input}
-              value={name}
-              onChangeText={setName}
-              placeholder="Product name"
-            />
-            <View style={styles.modalButtons}>
-              <Button title="Confirm" onPress={() => setShowModal(false)} />
-              <View style={{ width: 10 }} />
-              <Button
-                title="Cancel"
-                color="red"
-                onPress={() => {
-                  setShowModal(false);
-                  setScanned(false);
-                  setCode(null);
-                  setName('');
-                  setProduct(null);
-                }}
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
