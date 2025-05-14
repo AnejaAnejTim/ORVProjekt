@@ -66,25 +66,33 @@ export default function Index() {
     }
   }, []);
 
+  // Optimized scan handler for iOS compatibility
   const handleScan = useCallback((result) => {
+    // Log the entire result structure to see what iOS provides
     console.log('SCAN EVENT RECEIVED:', JSON.stringify(result));
     setScanAttempts(prev => prev + 1);
 
+    // Destructure with fallbacks for iOS differences
     const { data, type, bounds, cornerPoints } = result || {};
 
+    // Set debug message right away for feedback
     setDebugMsg(`Scan attempt: ${type || 'unknown'}`);
 
+    // Validate incoming data
     if (!data) {
       console.warn('Empty or invalid barcode data received');
       return;
     }
 
+    // Log valid scan
     console.log(`Valid barcode scanned: ${type} - ${data}`);
     setDebugMsg(`Scanned: ${type} - ${data}`);
 
+    // Only after validating we have data
     setScanned(true);
     setCode(data);
 
+    // Fetch product info
     fetchProductData(data);
   }, [fetchProductData]);
 
@@ -103,7 +111,13 @@ export default function Index() {
       <CameraView
         style={styles.camera}
         facing={camType}
-        barcodeScannerSettings={{}}
+        // iOS-optimized settings
+        barcodeScannerSettings={{
+          barCodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'qr', 'code39', 'code128','itf14'],
+          isGuidanceEnabled: true,
+          isHighlightingEnabled: true,
+          isPinchToZoomEnabled: true
+        }}
         onBarcodeScanned={scanned ? undefined : handleScan}
       />
 
