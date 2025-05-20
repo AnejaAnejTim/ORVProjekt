@@ -345,7 +345,6 @@ export default function Index() {
 
     const apiData = selectedProduct.apiData || {};
 
-    // Extract key product details to display
     const details = [
       { label: "Product Name", value: selectedProduct.name },
       { label: "Barcode", value: selectedProduct.id },
@@ -368,7 +367,6 @@ export default function Index() {
       { label: "Salt (100g)", value: apiData.nutriments?.salt_100g ? `${apiData.nutriments.salt_100g}g` : null },
     ];
 
-    // Find nutrient levels if available
     const nutrientLevels = apiData.nutrient_levels || {};
     const nutrientDetails = Object.entries(nutrientLevels).map(([key, value]) => {
       const nutrientName = key.replace(/_/g, ' ');
@@ -429,7 +427,6 @@ export default function Index() {
             </View>
           )}
 
-          {/* Raw Data Section (for debugging or advanced users) */}
           <View style={styles.detailsSection}>
             <Text style={styles.sectionTitle}>Raw Data</Text>
             <TouchableOpacity
@@ -529,7 +526,6 @@ export default function Index() {
     );
   }
 
-  // Product input form screen (replaces modal)
   if (showProductInput) {
     return (
       <View style={styles.container}>
@@ -542,31 +538,25 @@ export default function Index() {
     <View style={styles.container}>
       {!showSavedProducts ? (
         <>
-          <CameraView
-            style={styles.camera}
-            facing={camType}
-            barcodeScannerSettings={{
-              barcodeTypes: [
-                'ean13',
-                'ean8',
-                'upc_a',
-                'upc_e',
-                'code39',
-                'code128',
-                'code93',
-                'itf14',
-                'codabar',
-                'qr',
-                'pdf417',
-                'aztec',
-                'datamatrix'
-              ],
-              isGuidanceEnabled: true,
-              isHighlightingEnabled: true,
-              isPinchToZoomEnabled: true
-            }}
-            onBarcodeScanned={scanned ? undefined : handleScan}
-          />
+<CameraView
+        style={styles.camera}
+        barcodeScannerSettings={{
+          barCodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code39', 'code128'],
+          // iOS-specific optimizations
+          ...(Platform.OS === 'ios' ? {
+            isGuidanceEnabled: true,
+            isHighlightingEnabled: true
+          } : {})
+        }}
+        onBarcodeScanned={scanned ? undefined : handleScan}
+      >
+        <View style={styles.scanOverlay}>
+          <View style={[
+            styles.targetBox,
+            Platform.OS === 'ios' ? styles.iosTargetBox : styles.androidTargetBox
+          ]} />
+        </View>
+      </CameraView>
 
           {/* Debug overlay */}
           <View style={styles.debugOverlay}>
