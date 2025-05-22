@@ -1,9 +1,9 @@
+import { useIsFocused } from '@react-navigation/native';
 import { Camera, CameraView } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 import { UserContext } from '../userContext';
-
 
 export default function App() {
   const [hasPermission, setHasPermission] = useState(null);
@@ -13,15 +13,14 @@ export default function App() {
   const scanLockRef = useRef(false);
   const { user } = useContext(UserContext)!;
   const router = useRouter();
+  const isFocused = useIsFocused();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [editedWeight, setEditedWeight] = useState('');
   const [editedUnit, setEditedUnit] = useState('');
-  
   const [saveName, setSaveName] = useState('');
   const [saveUnit, setSaveUnit] = useState('');
   const [saveWeight, setSaveWeight] = useState('');
-
 
   useEffect(() => {
     const getCameraPermissions = async () => {
@@ -41,51 +40,43 @@ export default function App() {
   const fetchProductData = async (barcode) => {
     try {
       const localRes = await fetch(`http://100.117.101.70:3001/barcodes/${barcode}`);
-      
       if (localRes.ok) {
         const localData = await localRes.json();
         const name = localData.product_name || 'Unnamed product';
         const unit = localData.unit || '';
         const weight = localData.weight || '';
-        setSaveName(localData.product_name);
+        setSaveName(name);
         setSaveUnit(unit);
         setSaveWeight(weight);
-        console.log('Found in local DB:', name);
         setProductName(`${name} ${weight}${unit}`);
         return;
       }
+
       const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json?lc=sl`);
       const json = await response.json();
-
       if (json.status === 1) {
         const name = json.product.product_name_sl ||
-                    json.product.product_name_en ||
-                    json.product.product_name ||
-                    'Unnamed product';
+                     json.product.product_name_en ||
+                     json.product.product_name ||
+                     'Unnamed product';
         const packaging = json.product.packagings?.[0];
         const quantity = packaging?.quantity_per_unit_value || '';
         const unit = packaging?.quantity_per_unit_unit || '';
         setSaveName(name);
         setSaveUnit(unit);
         setSaveWeight(quantity);
-
-        console.log('Product found:', name);
         setProductName(`${name} ${quantity}${unit}`);
       } else {
-        console.log('Product not found in Open Food Facts');
         setProductName('Product not found');
       }
-
     } catch (err) {
       console.error('API error:', err);
       setProductName('Error fetching product');
     }
   };
 
-
   const handleBarcodeScanned = ({ type, data }) => {
-    if (scanLockRef.current) return; 
-
+    if (scanLockRef.current) return;
     scanLockRef.current = true;
     setScanned(true);
     setBarcodeData(data);
@@ -94,54 +85,48 @@ export default function App() {
   };
 
   const handleEditPress = () => {
-  
-      const [namePart, quantityPart] = productName.split(/ (?=\d)/);
-      const match = quantityPart?.match(/^(\d+)([a-zA-Z]+)?$/);
-      
-      setEditedName(namePart || '');
-      setEditedWeight(match?.[1] || '');
-      setEditedUnit(match?.[2] || '');
-
-      setIsModalVisible(true);
+    const [namePart, quantityPart] = productName.split(/ (?=\d)/);
+    const match = quantityPart?.match(/^(\d+)([a-zA-Z]+)?$/);
+    setEditedName(namePart || '');
+    setEditedWeight(match?.[1] || '');
+    setEditedUnit(match?.[2] || '');
+    setIsModalVisible(true);
   };
+
   const handleSaveEdit = async () => {
-  const newDisplayName = `${editedName} ${editedWeight}${editedUnit}`;
-  setSaveName(editedName);
-  setSaveUnit(editedUnit);
-  setSaveWeight(editedWeight);
+    const newDisplayName = `${editedName} ${editedWeight}${editedUnit}`;
+    setSaveName(editedName);
+    setSaveUnit(editedUnit);
+    setSaveWeight(editedWeight);
+    setProductName(newDisplayName);
+    setIsModalVisible(false);
 
-  setProductName(newDisplayName);
-  setIsModalVisible(false);
+    try {
+      const response = await fetch('http://100.117.101.70:3001/barcodes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: barcodeData,
+          product_name: editedName,
+          weight: editedWeight,
+          unit: editedUnit,
+        }),
+      });
 
-  try {
-    const response = await fetch('http://100.117.101.70:3001/barcodes', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        code: barcodeData,          
-        product_name: editedName,  
-        weight: editedWeight,
-        unit: editedUnit
-      }),
-    });
+      if (!response.ok) {
+        throw new Error(`Failed to save: ${response.status}`);
+      }
 
-    if (!response.ok) {
-      throw new Error(`Failed to save: ${response.status}`);
+      await response.json();
+    } catch (error) {
+      console.error('Error saving product:', error);
+      Alert.alert('Error', 'Failed to save product. Please try again.');
     }
-
-    const result = await response.json();
-  } catch (error) {
-    console.error('Error saving product:', error);
-    Alert.alert('Error', 'Failed to save product. Please try again.');
-  }
-};
-
+  };
 
   const handleAddPress = async () => {
     const ingredient = {
-      name: saveName,  
+      name: saveName,
       unit: saveUnit,
       quantity: saveWeight,
     };
@@ -150,59 +135,45 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(ingredient),
-        credentials: 'include'
+        credentials: 'include',
       });
 
       if (!response.ok) {
         throw new Error(`Failed to add to fridge: ${response.status}`);
       }
 
-      const result = await response.json();
+      await response.json();
       Alert.alert('Success', 'Ingredient added to your fridge!');
-      console.log('Added to fridge:', result);
       setScanned(false);
       scanLockRef.current = false;
       setBarcodeData('');
       setProductName('');
-
     } catch (error) {
       console.error('Error adding ingredient:', error);
       Alert.alert('Error', 'Failed to add ingredient. Please try again.');
     }
   };
 
-  if (hasPermission === null) {
-    return <Text>Requesting for camera permission</Text>;
-  }
-  if (hasPermission === false) {
-    return <Text>No access to camera</Text>;
-  }
+  if (hasPermission === null) return <Text>Requesting for camera permission</Text>;
+  if (hasPermission === false) return <Text>No access to camera</Text>;
 
   return (
-    
     <View style={styles.container}>
-      <CameraView
-        style={StyleSheet.absoluteFillObject}
-        facing="back"
-        onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
-        barcodeScannerSettings={{
-          barcodeTypes: [
-            'qr',
-            'pdf417',
-            'aztec',
-            'ean13',
-            'ean8',
-            'upc_a',
-            'upc_e',
-            'code128',
-            'code39',
-            'code93',
-            'codabar',
-            'itf14',
-            'datamatrix',
-          ],
-        }}
-      />
+      {isFocused && (
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          facing="back"
+          onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+          barcodeScannerSettings={{
+            barcodeTypes: [
+              'qr', 'pdf417', 'aztec', 'ean13', 'ean8', 'upc_a', 'upc_e',
+              'code128', 'code39', 'code93', 'codabar', 'itf14', 'datamatrix',
+            ],
+          }}
+        />
+      )}
+
+      {/* Modal for editing product info */}
       <Modal
         visible={isModalVisible}
         transparent
@@ -212,32 +183,9 @@ export default function App() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Spremeni produkt</Text>
-
-            <TextInput
-              placeholder="Ime"
-              value={editedName}
-              onChangeText={setEditedName}
-              style={styles.input}
-              placeholderTextColor="#999"
-            />
-
-            <TextInput
-              placeholder="Količina"
-              value={editedWeight}
-              onChangeText={setEditedWeight}
-              keyboardType="numeric"
-              style={styles.input}
-               placeholderTextColor="#999"
-            />
-
-            <TextInput
-              placeholder="Enota (npr. g, ml)"
-              value={editedUnit}
-              onChangeText={setEditedUnit}
-              style={styles.input}
-               placeholderTextColor="#999"
-            />
-
+            <TextInput placeholder="Ime" value={editedName} onChangeText={setEditedName} style={styles.input} />
+            <TextInput placeholder="Količina" value={editedWeight} onChangeText={setEditedWeight} keyboardType="numeric" style={styles.input} />
+            <TextInput placeholder="Enota (npr. g, ml)" value={editedUnit} onChangeText={setEditedUnit} style={styles.input} />
             <View style={styles.modalButtons}>
               <Button title="Cancel" color="#aaa" onPress={() => setIsModalVisible(false)} />
               <Button title="Save" onPress={handleSaveEdit} />
@@ -248,46 +196,36 @@ export default function App() {
 
       <View style={styles.overlay}>
         <Text style={styles.title}>Skeniraj svoj produkt</Text>
-
-        
-          {productName ? (
-            <View style={styles.resultBox}>
-            <>
-              <Text style={[styles.resultText, { marginTop: 10, fontWeight: 'bold', color: '#0a0' }]}>
-                {productName}
-              </Text>
-
-              <View style={styles.buttonsRow}>
-                <View style={styles.buttonWrapper}>
-                  <Button title="Edit" onPress={handleEditPress} color="#007BFF" />
-                </View>
-                <View style={styles.buttonWrapper}>
-                  <Button title="Add!" onPress={handleAddPress} color="#28a745" />
-                </View>
+        {productName && (
+          <View style={styles.resultBox}>
+            <Text style={[styles.resultText, { marginTop: 10, fontWeight: 'bold', color: '#0a0' }]}>
+              {productName}
+            </Text>
+            <View style={styles.buttonsRow}>
+              <View style={styles.buttonWrapper}>
+                <Button title="Edit" onPress={handleEditPress} color="#007BFF" />
               </View>
-            </>
+              <View style={styles.buttonWrapper}>
+                <Button title="Add!" onPress={handleAddPress} color="#28a745" />
+              </View>
             </View>
-          ) : null}
-        
-
+          </View>
+        )}
         {scanned && (
           <View style={styles.scanAgainButton}>
-            <Button
-              title="Scan Again"
-              onPress={() => {
-                setScanned(false);
-                scanLockRef.current = false;
-                setBarcodeData('');
-                setProductName('');
-              }}
-              color="#fff"
-            />
+            <Button title="Scan Again" onPress={() => {
+              setScanned(false);
+              scanLockRef.current = false;
+              setBarcodeData('');
+              setProductName('');
+            }} color="#fff" />
           </View>
         )}
       </View>
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   modalOverlay: {
