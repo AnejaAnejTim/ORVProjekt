@@ -1,8 +1,9 @@
 import { Camera, CameraView } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import { Alert, Button, StyleSheet, Text, View } from 'react-native';
+import { Alert, Button, Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 import { UserContext } from '../userContext';
+
 
 export default function App() {
   const [hasPermission, setHasPermission] = useState(null);
@@ -12,6 +13,15 @@ export default function App() {
   const scanLockRef = useRef(false);
   const { user } = useContext(UserContext)!;
   const router = useRouter();
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [editedName, setEditedName] = useState('');
+  const [editedWeight, setEditedWeight] = useState('');
+  const [editedUnit, setEditedUnit] = useState('');
+  
+  const [saveName, setSaveName] = useState('');
+  const [saveUnit, setSaveUnit] = useState('');
+  const [saveWeight, setSaveWeight] = useState('');
+
 
   useEffect(() => {
     const getCameraPermissions = async () => {
@@ -30,27 +40,51 @@ export default function App() {
 
   const fetchProductData = async (barcode) => {
     try {
-      console.log(`Fetching product data for barcode: ${barcode}`);
-      const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+      const localRes = await fetch(`http://100.117.101.70:3001/barcodes/${barcode}`);
+      
+      if (localRes.ok) {
+        const localData = await localRes.json();
+        const name = localData.product_name || 'Unnamed product';
+        const unit = localData.unit || '';
+        const weight = localData.weight || '';
+        setSaveName(localData.product_name);
+        setSaveUnit(unit);
+        setSaveWeight(weight);
+        console.log('Found in local DB:', name);
+        setProductName(`${name} ${weight}${unit}`);
+        return;
+      }
+      const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json?lc=sl`);
       const json = await response.json();
-      console.log('API response:', json);
 
       if (json.status === 1) {
-        const name = json.product.product_name || 'Unnamed product';
+        const name = json.product.product_name_sl ||
+                    json.product.product_name_en ||
+                    json.product.product_name ||
+                    'Unnamed product';
+        const packaging = json.product.packagings?.[0];
+        const quantity = packaging?.quantity_per_unit_value || '';
+        const unit = packaging?.quantity_per_unit_unit || '';
+        setSaveName(name);
+        setSaveUnit(unit);
+        setSaveWeight(quantity);
+
         console.log('Product found:', name);
-        setProductName(name);
+        setProductName(`${name} ${quantity}${unit}`);
       } else {
         console.log('Product not found in Open Food Facts');
         setProductName('Product not found');
       }
+
     } catch (err) {
       console.error('API error:', err);
       setProductName('Error fetching product');
     }
   };
 
+
   const handleBarcodeScanned = ({ type, data }) => {
-    if (scanLockRef.current) return; // Ignore if locked
+    if (scanLockRef.current) return; 
 
     scanLockRef.current = true;
     setScanned(true);
@@ -60,11 +94,81 @@ export default function App() {
   };
 
   const handleEditPress = () => {
-    Alert.alert('Edit button pressed', `Edit product: ${productName}`);
-  };
+  
+      const [namePart, quantityPart] = productName.split(/ (?=\d)/);
+      const match = quantityPart?.match(/^(\d+)([a-zA-Z]+)?$/);
+      
+      setEditedName(namePart || '');
+      setEditedWeight(match?.[1] || '');
+      setEditedUnit(match?.[2] || '');
 
-  const handleAddPress = () => {
-    Alert.alert('Add button pressed', `Add product: ${productName}`);
+      setIsModalVisible(true);
+  };
+  const handleSaveEdit = async () => {
+  const newDisplayName = `${editedName} ${editedWeight}${editedUnit}`;
+  setSaveName(editedName);
+  setSaveUnit(editedUnit);
+  setSaveWeight(editedWeight);
+
+  setProductName(newDisplayName);
+  setIsModalVisible(false);
+
+  try {
+    const response = await fetch('http://100.117.101.70:3001/barcodes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        code: barcodeData,          
+        product_name: editedName,  
+        weight: editedWeight,
+        unit: editedUnit
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to save: ${response.status}`);
+    }
+
+    const result = await response.json();
+  } catch (error) {
+    console.error('Error saving product:', error);
+    Alert.alert('Error', 'Failed to save product. Please try again.');
+  }
+};
+
+
+  const handleAddPress = async () => {
+    const ingredient = {
+      name: saveName,  
+      unit: saveUnit,
+      quantity: saveWeight,
+    };
+    try {
+      const response = await fetch('http://100.117.101.70:3001/myfridge/barcodeScan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ingredient),
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to add to fridge: ${response.status}`);
+      }
+
+      const result = await response.json();
+      Alert.alert('Success', 'Ingredient added to your fridge!');
+      console.log('Added to fridge:', result);
+      setScanned(false);
+      scanLockRef.current = false;
+      setBarcodeData('');
+      setProductName('');
+
+    } catch (error) {
+      console.error('Error adding ingredient:', error);
+      Alert.alert('Error', 'Failed to add ingredient. Please try again.');
+    }
   };
 
   if (hasPermission === null) {
@@ -75,6 +179,7 @@ export default function App() {
   }
 
   return (
+    
     <View style={styles.container}>
       <CameraView
         style={StyleSheet.absoluteFillObject}
@@ -98,9 +203,51 @@ export default function App() {
           ],
         }}
       />
+      <Modal
+        visible={isModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Spremeni produkt</Text>
+
+            <TextInput
+              placeholder="Ime"
+              value={editedName}
+              onChangeText={setEditedName}
+              style={styles.input}
+              placeholderTextColor="#999"
+            />
+
+            <TextInput
+              placeholder="Količina"
+              value={editedWeight}
+              onChangeText={setEditedWeight}
+              keyboardType="numeric"
+              style={styles.input}
+               placeholderTextColor="#999"
+            />
+
+            <TextInput
+              placeholder="Enota (npr. g, ml)"
+              value={editedUnit}
+              onChangeText={setEditedUnit}
+              style={styles.input}
+               placeholderTextColor="#999"
+            />
+
+            <View style={styles.modalButtons}>
+              <Button title="Cancel" color="#aaa" onPress={() => setIsModalVisible(false)} />
+              <Button title="Save" onPress={handleSaveEdit} />
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <View style={styles.overlay}>
-        <Text style={styles.title}>Barcode Scanner</Text>
+        <Text style={styles.title}>Skeniraj svoj produkt</Text>
 
         
           {productName ? (
@@ -143,6 +290,42 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  modalOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  justifyContent: 'center',
+  alignItems: 'center',
+  padding: 20,
+},
+modalContent: {
+  width: '90%',
+  backgroundColor: '#fff',
+  borderRadius: 10,
+  padding: 20,
+  shadowColor: '#000',
+  shadowOpacity: 0.25,
+  shadowOffset: { width: 0, height: 2 },
+  shadowRadius: 4,
+  elevation: 5,
+},
+modalTitle: {
+  fontSize: 18,
+  fontWeight: 'bold',
+  marginBottom: 10,
+  textAlign: 'center',
+},
+input: {
+  borderWidth: 1,
+  borderColor: '#ccc',
+  borderRadius: 5,
+  padding: 10,
+  marginBottom: 10,
+},
+modalButtons: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  marginTop: 10,
+},
   container: {
     flex: 1,
   },
