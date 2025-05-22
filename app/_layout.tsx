@@ -1,29 +1,29 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { Slot } from 'expo-router';
+import React, { useContext } from 'react';
+import { Text, View } from 'react-native';
+import { UserContext, UserProvider } from './userContext';
 
-import { useColorScheme } from '@/hooks/useColorScheme';
+function InnerLayout() {
+  const context = useContext(UserContext);
+  if (!context) return null;
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+  const { loading } = context;
 
-  if (!loaded) {
-    // Async font loading only occurs in development.
-    return null;
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Loading user...</Text>
+      </View>
+    );
   }
 
+  return <Slot />;
+}
+
+export default function RootLayout() {
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <UserProvider>
+      <InnerLayout />
+    </UserProvider>
   );
 }

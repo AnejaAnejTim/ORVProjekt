@@ -1,13 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Text, View, StyleSheet, Button, Alert } from 'react-native';
-import { CameraView, Camera } from 'expo-camera';
+import { Camera, CameraView } from 'expo-camera';
+import { useRouter } from 'expo-router';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import { Alert, Button, StyleSheet, Text, View } from 'react-native';
+import { UserContext } from '../userContext';
 
 export default function App() {
   const [hasPermission, setHasPermission] = useState(null);
   const [scanned, setScanned] = useState(false);
   const [barcodeData, setBarcodeData] = useState('');
   const [productName, setProductName] = useState('');
-  const scanLockRef = useRef(false); // To prevent rapid scans
+  const scanLockRef = useRef(false);
+  const { user } = useContext(UserContext)!;
+  const router = useRouter();
 
   useEffect(() => {
     const getCameraPermissions = async () => {
@@ -17,6 +21,12 @@ export default function App() {
 
     getCameraPermissions();
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      router.replace('../login');
+    }
+  }, [user]);
 
   const fetchProductData = async (barcode) => {
     try {
