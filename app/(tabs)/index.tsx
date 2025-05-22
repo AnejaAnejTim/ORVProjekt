@@ -1,75 +1,185 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { Text, View, StyleSheet, Button, Alert } from 'react-native';
+import { CameraView, Camera } from 'expo-camera';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+export default function App() {
+  const [hasPermission, setHasPermission] = useState(null);
+  const [scanned, setScanned] = useState(false);
+  const [barcodeData, setBarcodeData] = useState('');
+  const [productName, setProductName] = useState('');
+  const scanLockRef = useRef(false); // To prevent rapid scans
 
-export default function HomeScreen() {
+  useEffect(() => {
+    const getCameraPermissions = async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasPermission(status === 'granted');
+    };
+
+    getCameraPermissions();
+  }, []);
+
+  const fetchProductData = async (barcode) => {
+    try {
+      console.log(`Fetching product data for barcode: ${barcode}`);
+      const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+      const json = await response.json();
+      console.log('API response:', json);
+
+      if (json.status === 1) {
+        const name = json.product.product_name || 'Unnamed product';
+        console.log('Product found:', name);
+        setProductName(name);
+      } else {
+        console.log('Product not found in Open Food Facts');
+        setProductName('Product not found');
+      }
+    } catch (err) {
+      console.error('API error:', err);
+      setProductName('Error fetching product');
+    }
+  };
+
+  const handleBarcodeScanned = ({ type, data }) => {
+    if (scanLockRef.current) return; // Ignore if locked
+
+    scanLockRef.current = true;
+    setScanned(true);
+    setBarcodeData(data);
+    setProductName('');
+    fetchProductData(data);
+  };
+
+  const handleEditPress = () => {
+    Alert.alert('Edit button pressed', `Edit product: ${productName}`);
+  };
+
+  const handleAddPress = () => {
+    Alert.alert('Add button pressed', `Add product: ${productName}`);
+  };
+
+  if (hasPermission === null) {
+    return <Text>Requesting for camera permission</Text>;
+  }
+  if (hasPermission === false) {
+    return <Text>No access to camera</Text>;
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <View style={styles.container}>
+      <CameraView
+        style={StyleSheet.absoluteFillObject}
+        facing="back"
+        onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+        barcodeScannerSettings={{
+          barcodeTypes: [
+            'qr',
+            'pdf417',
+            'aztec',
+            'ean13',
+            'ean8',
+            'upc_a',
+            'upc_e',
+            'code128',
+            'code39',
+            'code93',
+            'codabar',
+            'itf14',
+            'datamatrix',
+          ],
+        }}
+      />
+
+      <View style={styles.overlay}>
+        <Text style={styles.title}>Barcode Scanner</Text>
+
+        
+          {productName ? (
+            <View style={styles.resultBox}>
+            <>
+              <Text style={[styles.resultText, { marginTop: 10, fontWeight: 'bold', color: '#0a0' }]}>
+                {productName}
+              </Text>
+
+              <View style={styles.buttonsRow}>
+                <View style={styles.buttonWrapper}>
+                  <Button title="Edit" onPress={handleEditPress} color="#007BFF" />
+                </View>
+                <View style={styles.buttonWrapper}>
+                  <Button title="Add!" onPress={handleAddPress} color="#28a745" />
+                </View>
+              </View>
+            </>
+            </View>
+          ) : null}
+        
+
+        {scanned && (
+          <View style={styles.scanAgainButton}>
+            <Button
+              title="Scan Again"
+              onPress={() => {
+                setScanned(false);
+                scanLockRef.current = false;
+                setBarcodeData('');
+                setProductName('');
+              }}
+              color="#fff"
+            />
+          </View>
+        )}
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
+    paddingVertical: 80,
+    paddingHorizontal: 20,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    textAlign: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    padding: 10,
+    borderRadius: 10,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  resultBox: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    padding: 20,
+    borderRadius: 10,
+    marginVertical: 20,
+    minWidth: 300,
+    alignItems: 'center',
+  },
+  resultText: {
+    fontSize: 16,
+    textAlign: 'center',
+    color: '#333',
+  },
+  buttonsRow: {
+    flexDirection: 'row',
+    marginTop: 15,
+    justifyContent: 'space-around',
+    width: '80%',
+  },
+  buttonWrapper: {
+    flex: 1,
+    marginHorizontal: 5,
+  },
+  scanAgainButton: {
+    width: '100%',
+    marginBottom: 10,
+    backgroundColor: '#007BFF',
+    borderRadius: 5,
   },
 });
