@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useIsFocused } from '@react-navigation/native';
 import { Camera, CameraView } from 'expo-camera';
 import { useRouter } from 'expo-router';
@@ -130,10 +131,12 @@ export default function App() {
       unit: saveUnit,
       quantity: saveWeight,
     };
+      const token = await AsyncStorage.getItem('token');
+      console.log('Token before myfridge fetch:', token);
     try {
       const response = await fetch('http://100.117.101.70:3001/myfridge/barcodeScan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json',Authorization: `Bearer ${token}`, },
         body: JSON.stringify(ingredient),
         credentials: 'include',
       });
@@ -206,7 +209,7 @@ export default function App() {
                 <Button title="Edit" onPress={handleEditPress} color="#007BFF" />
               </View>
               <View style={styles.buttonWrapper}>
-                <Button title="Add!" onPress={handleAddPress} color="#28a745" />
+                <Button title="Add!" onPress={handleAddPress} color="#28a745" disabled={saveName === 'Product not found'} />
               </View>
             </View>
           </View>

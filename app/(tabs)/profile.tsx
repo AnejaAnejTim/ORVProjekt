@@ -4,18 +4,22 @@ import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useContext } from 'react';
 import { UserContext } from '../userContext';
 
 export default function ProfileScreen() {
-  const { user, setUser } = useContext(UserContext);
+  const { user, setUser, refreshUser } = useContext(UserContext);
   const router = useRouter();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await AsyncStorage.removeItem('token');
     setUser(null);
+    await refreshUser();
     router.replace('/login');
   };
+
 
   return (
     <ParallaxScrollView

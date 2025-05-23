@@ -1,19 +1,21 @@
 import { useRouter } from 'expo-router';
 import React, { useContext, useState } from 'react';
 
+
 import {
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    useColorScheme,
-    View
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useColorScheme,
+  View
 } from 'react-native';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserContext } from './userContext';
 
 export default function Login() {
-  const { setUser } = useContext(UserContext);
+  const { setUser, refreshUser } = useContext(UserContext);
   const isDarkMode = useColorScheme() === 'dark';
   const router = useRouter();
 
@@ -21,28 +23,32 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleLogin = async () => {
-    setError('');
-    try {
-      const res = await fetch('http://100.117.101.70:3001/users/appLogin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
+const handleLogin = async () => {
+  setError('');
+  try {
+    const res = await fetch('http://100.117.101.70:3001/users/appLogin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
 
-      const data = await res.json();
+    const data = await res.json();
 
-      if (res.status === 200 && data.username) {
-        setUser(data);
-        router.push('/');
-      } else {
-        setError('Napačno uporabniško ime ali geslo');
-      }
-    } catch (err) {
-      console.error(err);
-      setError('Napaka pri prijavi');
+    if (res.status === 200 && data.token && data.user) {
+      await AsyncStorage.setItem('token', data.token);
+      setUser(data.user);
+
+      await refreshUser();
+
+      router.push('/');
+    } else {
+      setError('Napačno uporabniško ime ali geslo');
     }
-  };
+  } catch (err) {
+    console.error(err);
+    setError('Napaka pri prijavi');
+  }
+};
 
   return (
     <View
