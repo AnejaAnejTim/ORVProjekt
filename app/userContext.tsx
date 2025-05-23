@@ -8,39 +8,67 @@ interface UserContextType {
   loading: boolean;
 }
 
-export const UserContext = React.createContext<UserContextType | undefined>(undefined);
+export const UserContext = React.createContext<
+  UserContextType & { refreshUser: () => Promise<void> } | undefined
+>(undefined);
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const storedUser = await AsyncStorage.getItem('user');
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
-        }
-      } catch (error) {
-        console.error('Failed to load user from storage', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const refreshUser = async () => {
+  setLoading(true);
+  try {
+    const token = await AsyncStorage.getItem('token');
+    console.log('refreshUser: token from AsyncStorage:', token);
+    if (!token) {
+      console.log('No token found, setting user to null');
+      setUser(null);
+      setLoading(false);
+      return;
+    }
 
-    loadUser();
+    const response = await fetch('http://100.117.101.70:3001/users/appValidation', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    console.log('refreshUser: appValidation response status:', response.status);
+
+    if (response.ok) {
+      const profile = await response.json();
+      console.log('refreshUser: user profile fetched:', profile);
+      setUser(profile);
+    } else {
+      console.log('refreshUser: invalid token, removing token and clearing user');
+      setUser(null);
+      await AsyncStorage.removeItem('token');
+    }
+  } catch (error) {
+    console.error('Failed to load or validate user', error);
+    setUser(null);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+  useEffect(() => {
+    refreshUser();
   }, []);
 
   useEffect(() => {
-    if (user) {
-      AsyncStorage.setItem('user', JSON.stringify(user));
-    } else {
-      AsyncStorage.removeItem('user');
+    if (!loading && !user) {
+      AsyncStorage.removeItem('token').catch(console.error);
     }
-  }, [user]);
+  }, [user, loading]);
+
 
   return (
-    <UserContext.Provider value={{ user, setUser, loading }}>
+    <UserContext.Provider value={{ user, setUser, loading, refreshUser }}>
       {children}
     </UserContext.Provider>
   );
