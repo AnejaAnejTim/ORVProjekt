@@ -26,16 +26,20 @@ export default function Login() {
 const handleLogin = async () => {
   setError('');
   try {
-    const res = await fetch('http://100.117.101.70:3001/users/appLogin', {
+    console.log('Attempting login with:', { username, password });
+    const res = await fetch('http://100.102.9.9:3001/users/appLogin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     });
 
+    console.log('Login response status:', res.status);
     const data = await res.json();
+    console.log('Login response data:', data);
 
     if (res.status === 200 && data.token && data.user) {
       await AsyncStorage.setItem('token', data.token);
+      console.log('Token saved to AsyncStorage:', data.token);
       setUser(data.user);
 
       await refreshUser();
@@ -43,9 +47,10 @@ const handleLogin = async () => {
       router.push('/');
     } else {
       setError('Napačno uporabniško ime ali geslo');
+      console.log('Login failed:', data);
     }
   } catch (err) {
-    console.error(err);
+    console.error('Login error:', err);
     setError('Napaka pri prijavi');
   }
 };

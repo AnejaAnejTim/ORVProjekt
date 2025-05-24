@@ -31,7 +31,7 @@ const Register = (): React.JSX.Element => {
     }
 
     try {
-      const res = await fetch('http://100.117.101.70:3001/users', {
+      const res = await fetch('http://100.102.9.9:3001/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

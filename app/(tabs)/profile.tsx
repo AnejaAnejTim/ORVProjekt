@@ -1,5 +1,4 @@
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
-
 import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -12,7 +11,6 @@ import { UserContext } from '../userContext';
 export default function ProfileScreen() {
   const { user, setUser, refreshUser } = useContext(UserContext);
   const router = useRouter();
-
   const handleLogout = async () => {
     await AsyncStorage.removeItem('token');
     setUser(null);
@@ -20,6 +18,9 @@ export default function ProfileScreen() {
     router.replace('/login');
   };
 
+  const handleLoginApproval = () => {
+    router.push('/loginApproval');
+  };
 
   return (
     <ParallaxScrollView
@@ -40,6 +41,13 @@ export default function ProfileScreen() {
         Zdravo {user?.username ? user.username : ''}!
       </ThemedText>
 
+      {/* Approve Login Requests button */}
+      <View style={styles.approvalContainer}>
+        <TouchableOpacity onPress={handleLoginApproval} style={styles.approvalButton}>
+          <ThemedText style={styles.approvalText}>Approve Login Requests</ThemedText>
+        </TouchableOpacity>
+      </View>
+
       {/* Logout button */}
       <View style={styles.logoutContainer}>
         <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
@@ -47,7 +55,6 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
     </ParallaxScrollView>
-
   );
 }
 
@@ -63,12 +70,28 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 20,
   },
+  approvalContainer: {
+    marginTop: 30,
+    alignItems: 'center',
+  },
+  approvalButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  approvalText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
   logoutContainer: {
     marginTop: 40,
     alignItems: 'center',
   },
   logoutButton: {
-    backgroundColor: '#b22222', // red button
+    backgroundColor: '#b22222',
     paddingVertical: 12,
     paddingHorizontal: 30,
     borderRadius: 8,
