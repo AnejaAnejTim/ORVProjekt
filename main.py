@@ -1,151 +1,152 @@
 import os
 import glob
+import random
 import numpy as np
 import matplotlib.pyplot as plt
-import tensorflow as tf
-from tensorflow.keras import layers, models, optimizers, callbacks
-from tensorflow.keras.applications import MobileNetV2
+from PIL import Image, ImageEnhance, ImageOps
+import cv2 as cv
 from sklearn.model_selection import train_test_split
-from sklearn.utils import class_weight
+from sklearn.metrics import classification_report
+import tensorflow as tf
+from tensorflow.keras import layers, models, callbacks, optimizers
 
-# Configuration
-gpu_devices = tf.config.list_physical_devices('GPU')
-print("Num GPUs Available:", len(gpu_devices))
+# Parameters
+BATCH_SIZE =32
+EPOCHS = 50
+LEARNING_RATE = 0.0001
+IMG_SIZE = 120
 
-BATCH_SIZE = 16
-EPOCHS = 30
-LEARNING_RATE = 1e-4
-IMG_SIZE = (160, 160)
-CLASS_NAMES = ["drugo", "Tim_Andrejc"]
+# Load image paths
+tim_images = glob.glob(os.path.join("Tim_Andrejc", "**", "*.*"), recursive=True)
+drugi_images = glob.glob(os.path.join("drugo", "**", "*.*"), recursive=True)
 
-# 1) Load file paths and labels
-def load_image_paths_and_labels(base_dir):
-    paths, labels = [], []
-    for idx, cls in enumerate(CLASS_NAMES):
-        cls_dir = os.path.join(base_dir, cls)
-        imgs = glob.glob(os.path.join(cls_dir, "*.jpg")) + glob.glob(os.path.join(cls_dir, "*.png"))
-        paths += imgs
-        labels += [idx] * len(imgs)
-    return paths, labels
+# Undersample "drugi" class to match closer balance
+random.seed(42)
+drugi_images = random.sample(drugi_images, min(len(tim_images) * 2, len(drugi_images)))
 
-all_paths, all_labels = load_image_paths_and_labels('.')
+# Labels: 1 for Tim, 0 for others
+all_images = tim_images + drugi_images
+all_labels = [1] * len(tim_images) + [0] * len(drugi_images)
 
-# Balance classes via weights
-class_weights = class_weight.compute_class_weight(
-    'balanced', classes=np.unique(all_labels), y=all_labels
-)
-class_weights_dict = dict(enumerate(class_weights))
-
-# Split dataset
-train_paths, val_paths, train_labels, val_labels = train_test_split(
-    all_paths, all_labels, test_size=0.2, stratify=all_labels, random_state=42
+# Train/Val split
+X_train, X_val, y_train, y_val = train_test_split(
+    all_images, all_labels, test_size=0.2, stratify=all_labels, random_state=42
 )
 
-# 2) Preprocessing + Augmentation using tf.data API
-# Define a keras augmentation layer
-augmentation_layer = tf.keras.Sequential([
-    layers.RandomFlip('horizontal'),
-    layers.RandomRotation(0.15),
-    layers.RandomContrast(0.2),
-    layers.RandomBrightness(0.2)
-])
+pos = sum(y_train)
+neg = len(y_train) - pos
+weight_for_0 = (1 / neg) * (len(y_train)) / 2.0
+weight_for_1 = (1 / pos) * (len(y_train)) / 2.0
+class_weight = {0: weight_for_0, 1: weight_for_1}
 
-def preprocess_and_augment(path, label, training=True):
-    image = tf.io.read_file(path)
-    image = tf.image.decode_jpeg(image, channels=3)
-    image = tf.image.resize(image, IMG_SIZE)
-    image = image / 255.0
-    if training:
-        image = augmentation_layer(image)
-    return image, label
+# Load and preprocess image
+def nalozi_sliko(pot):
+    try:
+        img = cv.imread(pot)
+        img = cv.resize(img, (IMG_SIZE, IMG_SIZE))
+        return img
+    except:
+        return np.zeros((IMG_SIZE, IMG_SIZE, 3), dtype=np.uint8)
 
-train_ds = tf.data.Dataset.from_tensor_slices((train_paths, train_labels))
-train_ds = (
-    train_ds.shuffle(len(train_paths))
-            .map(lambda p, l: preprocess_and_augment(p, l, True), num_parallel_calls=tf.data.AUTOTUNE)
-            .batch(BATCH_SIZE)
-            .prefetch(tf.data.AUTOTUNE)
-)
+# Augment image
+def augmentiraj(img):
+    pil = Image.fromarray(img.astype('uint8'))
+    if random.random() > 0.8:
+        pil = pil.rotate(random.uniform(-90, 90), resample=Image.BICUBIC)
+    if random.random() > 0.8:
+        pil = ImageEnhance.Brightness(pil).enhance(random.uniform(0.5, 1.4))
+    if random.random() > 0.6:
+        pil = ImageOps.mirror(pil)
+    if random.random() > 0.5:
+        pil = ImageOps.flip(pil)
+    return np.array(pil)
 
-val_ds = tf.data.Dataset.from_tensor_slices((val_paths, val_labels))
-val_ds = (
-    val_ds.map(lambda p, l: preprocess_and_augment(p, l, False), num_parallel_calls=tf.data.AUTOTUNE)
-          .batch(BATCH_SIZE)
-          .prefetch(tf.data.AUTOTUNE)
-)
+# Data generator yielding images, labels, and sample weights
+def generator(image_paths, labels, batch_size, augment=False, shuffle=True, class_weight=None):
+    while True:
+        idxs = np.arange(len(image_paths))
+        if shuffle:
+            np.random.shuffle(idxs)
+        for i in range(0, len(image_paths), batch_size):
+            batch_idxs = idxs[i:i + batch_size]
+            batch_images, batch_labels, batch_weights = [], [], []
+            for j in batch_idxs:
+                img = nalozi_sliko(image_paths[j])
+                if augment:
+                    img = augmentiraj(img)
+                img = img.astype('float32') / 255.0
+                batch_images.append(img)
+                batch_labels.append(labels[j])
+                if class_weight is not None:
+                    batch_weights.append(class_weight[labels[j]])
+                else:
+                    batch_weights.append(1.0)
+            yield np.array(batch_images), np.array(batch_labels).reshape(-1, 1), np.array(batch_weights)
 
-# 3) Build model with pretrained MobileNetV2 backbone
-base_model = MobileNetV2(input_shape=IMG_SIZE + (3,), include_top=False, weights='imagenet')
-base_model.trainable = False
+# Build the model
+def zgradi_model():
+    model = models.Sequential()
+    model.add(layers.Conv2D(16, (5, 5), activation='relu', input_shape=(IMG_SIZE, IMG_SIZE, 3)))
+    model.add(layers.MaxPooling2D(pool_size=(2, 2)))
+    model.add(layers.Conv2D(36, (5, 5), activation='relu'))
+    model.add(layers.MaxPooling2D(pool_size=(2, 2)))
+    model.add(layers.Flatten())
+    model.add(layers.Dense(128, activation='relu'))
+    model.add(layers.Dropout(0.5))
+    model.add(layers.Dense(1, activation='sigmoid'))  # binary output
+    model.compile(optimizer=optimizers.Adam(LEARNING_RATE),
+                  loss="binary_crossentropy",
+                  metrics=["accuracy"])
+    return model
 
-inputs = layers.Input(shape=IMG_SIZE + (3,))
-x = base_model(inputs, training=False)
-x = layers.GlobalAveragePooling2D()(x)
-x = layers.BatchNormalization()(x)
-x = layers.Dropout(0.5)(x)
-x = layers.Dense(128, activation='relu')(x)
-x = layers.BatchNormalization()(x)
-x = layers.Dropout(0.5)(x)
-outputs = layers.Dense(1, activation='sigmoid')(x)
+# Prepare generators with class weights for training
+train_gen = generator(X_train, y_train, BATCH_SIZE, augment=True, class_weight=class_weight)
+val_gen = generator(X_val, y_val, BATCH_SIZE, augment=False, shuffle=False)
 
-model = models.Model(inputs, outputs)
-model.compile(
-    optimizer=optimizers.Adam(LEARNING_RATE),
-    loss='binary_crossentropy',
-    metrics=['accuracy', tf.keras.metrics.AUC(name='auc')]
-)
-model.summary()
-
-# 4) Callbacks
-cb = [
-    callbacks.EarlyStopping(patience=5, restore_best_weights=True),
-    callbacks.ReduceLROnPlateau(patience=3, factor=0.5, min_lr=1e-6)
-]
-
-# 5) Train model
+# Train model (note: do NOT pass class_weight argument here)
+model = zgradi_model()
 history = model.fit(
-    train_ds,
-    validation_data=val_ds,
+    train_gen,
+    steps_per_epoch=len(X_train) // BATCH_SIZE,
     epochs=EPOCHS,
-    class_weight=class_weights_dict,
-    callbacks=cb
+    validation_data=val_gen,
+    validation_steps=len(X_val) // BATCH_SIZE,
+    callbacks=[
+        callbacks.EarlyStopping(patience=6, restore_best_weights=True),
+        callbacks.ReduceLROnPlateau(patience=3, factor=0.5, min_lr=1e-6)
+    ]
 )
 
-# 6) Unfreeze some layers and fine-tune
-base_model.trainable = True
-for layer in base_model.layers[:-20]:
-    layer.trainable = False
+# Save model
+model.save("TimAndrejc.keras")
 
-model.compile(
-    optimizer=optimizers.Adam(LEARNING_RATE / 10),
-    loss='binary_crossentropy',
-    metrics=['accuracy', tf.keras.metrics.AUC(name='auc')]
-)
-
-fine_history = model.fit(
-    train_ds,
-    validation_data=val_ds,
-    epochs=10,
-    class_weight=class_weights_dict,
-    callbacks=cb
-)
-
-# 7) Save and plot results
-model.save('tim_andrejc_facenet.h5')
-
+# Plot training history
 plt.figure(figsize=(12, 5))
 plt.subplot(1, 2, 1)
-plt.plot(history.history['loss'] + fine_history.history['loss'], label='train')
-plt.plot(history.history['val_loss'] + fine_history.history['val_loss'], label='val')
+plt.plot(history.history['loss'], label='Train')
+plt.plot(history.history['val_loss'], label='Val')
 plt.title('Loss')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
 plt.legend()
 
 plt.subplot(1, 2, 2)
-plt.plot(history.history['accuracy'] + fine_history.history['accuracy'], label='train')
-plt.plot(history.history['val_accuracy'] + fine_history.history['val_accuracy'], label='val')
+plt.plot(history.history['accuracy'], label='Train')
+plt.plot(history.history['val_accuracy'], label='Val')
 plt.title('Accuracy')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
 plt.legend()
 
 plt.tight_layout()
-plt.savefig('training_results.png')
 plt.show()
+
+print("\nClassification Report on Validation Data:")
+y_true, y_pred = [], []
+for path, label in zip(X_val, y_val):
+    img = nalozi_sliko(path).astype('float32') / 255.0
+    pred = model.predict(np.expand_dims(img, axis=0))[0][0]
+    y_true.append(label)
+    y_pred.append(1 if pred > 0.3 else 0)  # custom threshold
+
+print(classification_report(y_true, y_pred, target_names=["drugo", "Tim_Andrejc"]))
