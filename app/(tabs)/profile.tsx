@@ -15,7 +15,7 @@ export default function ProfileScreen() {
     await AsyncStorage.removeItem('token');
     setUser(null);
     await refreshUser();
-    router.replace('/login');
+    router.replace('../login');
   };
 
   const handleLoginApproval = () => {
