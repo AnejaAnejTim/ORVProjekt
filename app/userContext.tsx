@@ -27,8 +27,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
       return;
     }
-
-    const response = await fetch('http://100.117.101.70:3001/users/appValidation', {
+    const response = await fetch(`http://100.102.9.9:3001/users/appValidation`, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
