@@ -27,7 +27,7 @@ const handleLogin = async () => {
   setError('');
   try {
     console.log('Attempting login with:', { username, password });
-    const res = await fetch('http://100.102.9.9:3001/users/appLogin', {
+    const res = await fetch('http://100.117.101.70:3001/users/appLogin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),

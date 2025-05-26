@@ -1,10 +1,22 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, Alert, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
-const PENDING_LOGINS_URL = 'http://100.102.9.9:3001/login-confirmation/pending';
+import { useNavigation } from '@react-navigation/native';
+
+const PENDING_LOGINS_URL = 'http://100.117.101.70:3001/login-confirmation/pending';
 
 export default function PendingLoginsScreen() {
+  const navigation = useNavigation();
+
   const [pendingLogins, setPendingLogins] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -50,7 +62,7 @@ export default function PendingLoginsScreen() {
       if (!jwtToken) throw new Error('No JWT token found');
       const body = JSON.stringify({ confirmationToken: loginId });
       console.log('approveLogin: request body:', body);
-      const res = await fetch('http://100.102.9.9:3001/login-confirmation/approve', {
+      const res = await fetch('http://100.117.101.70:3001/login-confirmation/approve', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${jwtToken}`,
@@ -80,7 +92,7 @@ export default function PendingLoginsScreen() {
       if (!jwtToken) throw new Error('No JWT token found');
       const body = JSON.stringify({ confirmationToken: loginId });
       console.log('denyLogin: request body:', body);
-      const res = await fetch('http://100.102.9.9:3001/login-confirmation/deny', {
+      const res = await fetch('http://100.117.101.70:3001/login-confirmation/deny', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${jwtToken}`,
@@ -105,44 +117,51 @@ export default function PendingLoginsScreen() {
 
   if (loading) return <ActivityIndicator style={{ flex: 1, justifyContent: 'center' }} />;
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.title}>Pending Logins</Text>
-        {pendingLogins.length === 0 ? (
-          <Text style={styles.emptyText}>No pending logins.</Text>
-        ) : (
-          <FlatList
-            data={pendingLogins}
-            keyExtractor={item => item._id}
-            renderItem={({ item }) => (
-              <View style={styles.loginItem}>
-                <Text style={styles.loginText}>
-                  {item.deviceInfo?.browser || 'Unknown device'} - {item.status}
-                </Text>
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <TouchableOpacity
-                    onPress={() => approveLogin(item.confirmationToken)}
-                    style={styles.approveButton}
-                  >
-                    <Text style={styles.approveButtonText}>Approve</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => denyLogin(item.confirmationToken)}
-                    style={[styles.approveButton, { backgroundColor: '#e57373' }]}
-                  >
-                    <Text style={styles.approveButtonText}>Deny</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-          />
-        )}
-      </View>
-    </View>
-  );
-}
+ return (
+  <View style={styles.container}>
 
+    <TouchableOpacity
+      onPress={() => navigation.goBack()}
+      style={styles.backButton}
+    >
+      <Text style={styles.backButtonText}>← Back</Text>
+    </TouchableOpacity>
+
+    <View style={styles.card}>
+      <Text style={styles.title}>Pending Logins</Text>
+      {pendingLogins.length === 0 ? (
+        <Text style={styles.emptyText}>No pending logins.</Text>
+      ) : (
+        <FlatList
+          data={pendingLogins}
+          keyExtractor={item => item._id}
+          renderItem={({ item }) => (
+            <View style={styles.loginItem}>
+              <Text style={styles.loginText}>
+                {item.deviceInfo?.browser || 'Unknown device'} - {item.status}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity
+                  onPress={() => approveLogin(item.confirmationToken)}
+                  style={styles.approveButton}
+                >
+                  <Text style={styles.approveButtonText}>Approve</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => denyLogin(item.confirmationToken)}
+                  style={[styles.approveButton, { backgroundColor: '#e57373' }]}
+                >
+                  <Text style={styles.approveButtonText}>Deny</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        />
+      )}
+    </View>
+  </View>
+);
+}
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -150,6 +169,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
+  },
+  backButton: {
+    position: 'absolute',
+    top: 50,
+    left: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    zIndex: 10,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#66ccff',
+    fontWeight: 'bold',
   },
   card: {
     width: '100%',
