@@ -1,4 +1,3 @@
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -6,6 +5,7 @@ import { IconSymbol } from '@/components/ui/IconSymbol';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useContext } from 'react';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { UserContext } from '../userContext';
 
 export default function ProfileScreen() {
@@ -19,7 +19,7 @@ export default function ProfileScreen() {
   };
 
   const handleLoginApproval = () => {
-    router.push('/loginApproval');
+    router.push('../faceAuth');
   };
 
   return (
