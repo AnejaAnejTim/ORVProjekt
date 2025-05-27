@@ -40,7 +40,7 @@ export default function App() {
 
   const fetchProductData = async (barcode) => {
     try {
-      const localRes = await fetch(`http://100.102.9.9:3001/barcodes/${barcode}`);
+      const localRes = await fetch(`http://100.117.101.70:3001/barcodes/${barcode}`);
       if (localRes.ok) {
         const localData = await localRes.json();
         const name = localData.product_name || 'Unnamed product';
@@ -103,7 +103,7 @@ export default function App() {
     setIsModalVisible(false);
 
     try {
-      const response = await fetch('http://100.102.9.9:3001/barcodes', {
+      const response = await fetch('http://100.117.101.70:3001/barcodes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -134,7 +134,7 @@ export default function App() {
       const token = await AsyncStorage.getItem('token');
       console.log('Token before myfridge fetch:', token);
     try {
-      const response = await fetch('http://100.102.9.9:3001/myfridge/barcodeScan', {
+      const response = await fetch('http://100.117.101.70:3001/myfridge/barcodeScan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json',Authorization: `Bearer ${token}`, },
         body: JSON.stringify(ingredient),

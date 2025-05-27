@@ -3,7 +3,7 @@ import React, { ReactNode, useEffect, useState } from 'react';
 import { User } from './types';
 
 interface UserContextType {
-  user: User | null;
+  user: User;
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
   loading: boolean;
 }
@@ -21,13 +21,15 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   try {
     const token = await AsyncStorage.getItem('token');
     console.log('refreshUser: token from AsyncStorage:', token);
+
     if (!token) {
       console.log('No token found, setting user to null');
       setUser(null);
       setLoading(false);
       return;
     }
-    const response = await fetch(`http://100.102.9.9:3001/users/appValidation`, {
+      console.log("afhugja");
+    const response = await fetch(`http://100.117.101.70:3001/users/appValidation`, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
