@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { Camera, CameraView } from 'expo-camera';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -10,7 +11,7 @@ export default function FaceAuth() {
   const router = useRouter();
   const [hasPermission, setHasPermission] = useState(null);
   const [loading, setLoading] = useState(false);
-    const navigation = useNavigation();
+  const navigation = useNavigation();
 
   useEffect(() => {
     (async () => {
@@ -20,42 +21,48 @@ export default function FaceAuth() {
   }, []);
 
   const handleScan = async () => {
-  if (!cameraRef.current) return;
+    if (!cameraRef.current) return;
 
-  setLoading(true);
+    setLoading(true);
 
-  try {
-    const photo = await cameraRef.current.takePictureAsync({
-      quality: 0.3,
-      base64: false,
-    });
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 1,
+        base64: false,
+      });
 
-    const token = await AsyncStorage.getItem('token');
-    const email = await AsyncStorage.getItem('email');
+      const resizedPhoto = await ImageManipulator.manipulateAsync(
+        photo.uri,
+        [{ resize: { width: 300, height: 300 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+      );
 
-    if (!email) {
-      Alert.alert('Error', 'Email not found in local storage');
-      setLoading(false);
-      return;
-    }
+      const token = await AsyncStorage.getItem('token');
+      const email = await AsyncStorage.getItem('email');
 
-    const formData = new FormData();
-    formData.append('email', email);
-    formData.append('image', {
-      uri: photo.uri,
-      type: 'image/jpeg',
-      name: 'face.jpg',
-    });
+      if (!email) {
+        Alert.alert('Error', 'Email not found in local storage');
+        setLoading(false);
+        return;
+      }
 
-    const res = await fetch('http://100.117.101.70:5001/authenticateFace', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-      body: formData,
-    });
+      const formData = new FormData();
+      formData.append('email', email);
+      formData.append('image', {
+        uri: resizedPhoto.uri,
+        type: 'image/jpeg',
+        name: 'face.jpg',
+      });
 
-    const result = await res.json();
+      const res = await fetch('http://100.89.211.100:5001/authenticateFace', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const result = await res.json();
 
     if (res.ok && result.success) {
       router.replace('/loginApproval');

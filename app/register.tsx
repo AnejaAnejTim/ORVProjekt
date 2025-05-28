@@ -62,7 +62,7 @@ const Register = (): React.JSX.Element => {
     formData.append('email', email);
     formData.append('username', username);
 
-    const res = await fetch('http://100.117.101.70:5001/register-face', {
+    const res = await fetch('http://100.89.211.100:5001/register-face', {
       method: 'POST',
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -296,7 +296,7 @@ const Register = (): React.JSX.Element => {
           <View style={{ padding: 20, backgroundColor: '#000' }}>
             {!capturing && (
               <TouchableOpacity style={styles.button} onPress={captureFaceData}>
-                <Text style={styles.buttonText}>Start Capturing 40 Photos</Text>
+                <Text style={styles.buttonText}>Start Capturing 30 Photos</Text>
               </TouchableOpacity>
             )}
 
