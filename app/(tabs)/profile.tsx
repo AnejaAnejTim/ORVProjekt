@@ -41,14 +41,12 @@ export default function ProfileScreen() {
         Zdravo {user?.username ? user.username : ''}!
       </ThemedText>
 
-      {/* Approve Login Requests button */}
       <View style={styles.approvalContainer}>
         <TouchableOpacity onPress={handleLoginApproval} style={styles.approvalButton}>
           <ThemedText style={styles.approvalText}>Approve Login Requests</ThemedText>
         </TouchableOpacity>
       </View>
 
-      {/* Logout button */}
       <View style={styles.logoutContainer}>
         <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
           <ThemedText style={styles.logoutText}>Logout</ThemedText>
