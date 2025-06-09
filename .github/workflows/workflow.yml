@@ -17,11 +17,8 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ORV-image -f docker/Dockerfile docker/
+      - name: Build Docker image
+        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/orv-image -f docker/Dockerfile docker/
 
-      - run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/ORV-image
-
-      - name: Run Docker Container
-        run: |
-          chmod +x docker/run.sh
-          ./docker/run.sh
+      - name: Push Docker image
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/orv-image
