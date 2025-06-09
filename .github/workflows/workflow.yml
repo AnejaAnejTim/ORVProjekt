@@ -23,7 +23,3 @@ jobs:
       - name: Push Docker image
         run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/orv-image
 
-      - name: Run Docker Container
-        run: |
-          chmod +x docker/run.sh
-          ./docker/run.sh ${{ secrets.DOCKERHUB_USERNAME }}/orv-image
