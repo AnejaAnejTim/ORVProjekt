@@ -4,9 +4,7 @@
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2562abf5-07b4-4cfc-9ead-25c9530114ff" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.github/workflows/workflow.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/workflows/workflow.yml" afterDir="false" />
-    </list>
+    <list default="true" id="2562abf5-07b4-4cfc-9ead-25c9530114ff" name="Changes" comment="docker fix" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -73,6 +71,14 @@
       <option name="presentableId" value="Default" />
       <updated>1746712207672</updated>
     </task>
+    <task id="LOCAL−00001" summary="docker fix">
+      <option name="closed" value="true" />
+      <created>1749492666279</created>
+      <option name="number" value="LOCAL−00001" />
+      <option name="presentableId" value="LOCAL−00001" />
+      <updated>1749492666279</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -85,5 +91,9 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="docker fix" />
+    <option name="LAST_COMMIT_MESSAGE" value="docker fix" />
   </component>
 </project>
