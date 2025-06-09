@@ -40,7 +40,6 @@ const handleLogin = async () => {
     if (res.status === 200 && data.token && data.user) {
       await AsyncStorage.setItem('token', data.token);
       await AsyncStorage.setItem('email', data.user.email);
-      console.log(data.user.email);
       console.log('Token saved to AsyncStorage:', data.token);
       setUser(data.user);
 

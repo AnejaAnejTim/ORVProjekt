@@ -28,7 +28,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
       return;
     }
-      console.log("afhugja");
     const response = await fetch(`http://100.117.101.70:3001/users/appValidation`, {
       method: 'GET',
       headers: {
@@ -42,11 +41,13 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     if (response.ok) {
       const profile = await response.json();
       console.log('refreshUser: user profile fetched:', profile);
+      await AsyncStorage.setItem('userId', profile._id);
       setUser(profile);
     } else {
       console.log('refreshUser: invalid token, removing token and clearing user');
       setUser(null);
       await AsyncStorage.removeItem('token');
+      await AsyncStorage.removeItem('userId');
     }
   } catch (error) {
     console.error('Failed to load or validate user', error);

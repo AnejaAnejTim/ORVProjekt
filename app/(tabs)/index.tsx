@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useIsFocused } from '@react-navigation/native';
 import { Camera, CameraView } from 'expo-camera';
+import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Modal, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -22,6 +23,68 @@ export default function App() {
   const [saveName, setSaveName] = useState('');
   const [saveUnit, setSaveUnit] = useState('');
   const [saveWeight, setSaveWeight] = useState('');
+
+  useEffect(() => {
+    const subscriptionReceived = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Notifikacija:', notification);
+    });
+
+    const subscriptionResponse = Notifications.addNotificationResponseReceivedListener(response => {
+      console.log('Obvestilo:', response);
+      const data = response.notification.request.content.data;
+
+      if (data?.type === 'login_confirmation') {
+        router.push('/faceAuth');
+      }
+    });
+
+    return () => {
+      subscriptionReceived.remove();
+      subscriptionResponse.remove();
+    };
+  }, []);
+
+
+  useEffect(() => {
+    const registerForPushNotifications = async () => {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== 'granted') {
+        console.warn('Push notification permissions not granted!');
+        return;
+      }
+
+      const pushtoken = await Notifications.getExpoPushTokenAsync();
+      const token = await AsyncStorage.getItem('token');
+      const userId = await AsyncStorage.getItem('userId');
+      if (userId && pushtoken?.data) {
+        await fetch('http://100.117.101.70:3001/users/savePushToken', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            user: userId,
+            token: pushtoken.data,
+          }),
+        });
+
+      }else{
+        console.log("Failed");
+        console.log(userId);
+      }
+    };
+
+    registerForPushNotifications();
+  }, []);
+
 
   useEffect(() => {
     const getCameraPermissions = async () => {
