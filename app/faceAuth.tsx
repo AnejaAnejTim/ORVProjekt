@@ -1,127 +1,135 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from '@react-navigation/native';
-import { Camera, CameraView } from 'expo-camera';
+import {useNavigation} from '@react-navigation/native';
+import {CameraView, useCameraPermissions} from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
+import {useRouter} from 'expo-router';
+import React, {useEffect, useRef, useState} from 'react';
+import {ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 export default function FaceAuth() {
-  const cameraRef = useRef(null);
-  const router = useRouter();
-  const [hasPermission, setHasPermission] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const navigation = useNavigation();
+    const cameraRef = useRef<CameraView>(null);
+    const router = useRouter();
+    const [permission, requestPermission] = useCameraPermissions();
+    const [loading, setLoading] = useState(false);
+    const navigation = useNavigation();
 
-  useEffect(() => {
-    (async () => {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
-    })();
-  }, []);
+    useEffect(() => {
+        if (!permission || !permission.granted) {
+            requestPermission();
+        }
+    }, [permission]);
 
-  const handleScan = async () => {
-    if (!cameraRef.current) return;
+    const handleScan = async () => {
+        if (!cameraRef.current) return;
 
-    setLoading(true);
+        setLoading(true);
 
-    try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 1,
-        base64: false,
-      });
+        try {
+            const photo = await cameraRef.current.takePictureAsync({
+                quality: 1,
+                base64: false,
+            });
 
-      const resizedPhoto = await ImageManipulator.manipulateAsync(
-        photo.uri,
-        [{ resize: { width: 300, height: 300 } }],
-        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
-      );
+            const resizedPhoto = await ImageManipulator.manipulateAsync(
+                photo.uri,
+                [{resize: {width: 300, height: 300}}],
+                {compress: 0.8, format: ImageManipulator.SaveFormat.JPEG}
+            );
 
-      const token = await AsyncStorage.getItem('token');
-      const email = await AsyncStorage.getItem('email');
+            const token = await AsyncStorage.getItem('token');
+            const email = await AsyncStorage.getItem('email');
 
-      if (!email) {
-        Alert.alert('Error', 'Email not found in local storage');
-        setLoading(false);
-        return;
-      }
+            if (!token) {
+                Alert.alert('Error', 'Authentication token not found');
+                setLoading(false);
+                return;
+            }
 
-      const formData = new FormData();
-      formData.append('email', email);
-      formData.append('image', {
-        uri: resizedPhoto.uri,
-        type: 'image/jpeg',
-        name: 'face.jpg',
-      });
+            if (!email) {
+                Alert.alert('Error', 'Email not found in local storage');
+                setLoading(false);
+                return;
+            }
 
-      const res = await fetch('http://100.89.211.100:5001/authenticateFace', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-      });
+            const formData = new FormData();
+            formData.append('email', email);
+            formData.append('image', {
+                uri: resizedPhoto.uri,
+                type: 'image/jpeg',
+                name: 'face.jpg',
+            } as any);
 
-      const result = await res.json();
+            const res = await fetch('http://localhost:5001/authenticateFace', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: formData,
+            });
 
-    if (res.ok && result.success) {
-      router.replace('/loginApproval');
-    } else {
-      Alert.alert('Authentication Failed', result.message || 'Face not recognized');
-    }
+            const result = await res.json();
 
-  } catch (err) {
-    console.log('faceAuth error:', err);
-    Alert.alert('Error', 'Could not verify your face');
-  } finally {
-    setLoading(false);
-  }
-};
+            if (res.ok && result.success) {
+                router.replace('/loginApproval');   
+            } else {
+                Alert.alert('Authentication Failed', result.message || 'Face not recognized');
+            }
 
+        } catch (err) {
+            console.log('faceAuth error:', err);
+            Alert.alert('Error', 'Could not verify your face');
+        } finally {
+            setLoading(false);
+        }
+    };
 
+    if (!permission) return <View style={styles.container}><ActivityIndicator /></View>;
+    if (!permission.granted) return <View style={styles.container}><Text>No access to camera</Text></View>;
 
-  if (hasPermission === null) return <View><Text>Requesting camera access...</Text></View>;
-  if (hasPermission === false) return <View><Text>No access to camera</Text></View>;
-
-  return (
-    <View style={{ flex: 1 }}>
-         <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              style={styles.backButton}
+    return (
+        <View style={{flex: 1}}>
+            <TouchableOpacity
+                onPress={() => navigation.goBack()}
+                style={styles.backButton}
             >
-              <Text style={styles.backButtonText}>← Back</Text>
+                <Text style={styles.backButtonText}>← Back</Text>
             </TouchableOpacity>
-        
-      <CameraView style={{ flex: 1 }} ref={cameraRef} facing="front"/>
-      <TouchableOpacity style={styles.button} onPress={handleScan} disabled={loading}>
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Scan Face</Text>}
-      </TouchableOpacity>
-    </View>
-  );
+
+            <CameraView style={{flex: 1}} ref={cameraRef} facing="front"/>
+            <TouchableOpacity style={styles.button} onPress={handleScan} disabled={loading}>
+                {loading ? <ActivityIndicator color="#fff"/> : <Text style={styles.buttonText}>Scan Face</Text>}
+            </TouchableOpacity>
+        </View>
+    );
 }
 
 const styles = StyleSheet.create({
-  button: {
-    position: 'absolute',
-    bottom: 40,
-    alignSelf: 'center',
-    backgroundColor: '#4caf50',
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 30,
-  },
+    container: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#000',
+    },
+    button: {
+        position: 'absolute',
+        bottom: 40,
+        alignSelf: 'center',
+        backgroundColor: '#4caf50',
+        paddingVertical: 12,
+        paddingHorizontal: 32,
+        borderRadius: 30,
+    },
     backButton: {
-    position: 'absolute',
-    top: 50,
-    left: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    zIndex: 10,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#66ccff',
-    fontWeight: 'bold',
-  },
-  buttonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' }
+        position: 'absolute',
+        top: 50,
+        left: 12,
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        zIndex: 10,
+    },
+    backButtonText: {
+        fontSize: 16,
+        color: '#66ccff',
+        fontWeight: 'bold',
+    },
+    buttonText: {color: '#fff', fontSize: 18, fontWeight: 'bold'}
 });

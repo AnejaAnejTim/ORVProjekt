@@ -3,7 +3,7 @@ import React, { ReactNode, useEffect, useState } from 'react';
 import { User } from './types';
 
 interface UserContextType {
-  user: User;
+  user: User | null;
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
   loading: boolean;
 }
@@ -17,46 +17,45 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   const refreshUser = async () => {
-  setLoading(true);
-  try {
-    const token = await AsyncStorage.getItem('token');
-    console.log('refreshUser: token from AsyncStorage:', token);
+    setLoading(true);
+    try {
+      const token = await AsyncStorage.getItem('token');
+      console.log('refreshUser: token from AsyncStorage:', token);
 
-    if (!token) {
-      console.log('No token found, setting user to null');
+      if (!token) {
+        console.log('No token found, setting user to null');
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+      const response = await fetch(`http://192.168.0.13:3001/users/appValidation`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('refreshUser: appValidation response status:', response.status);
+
+      if (response.ok) {
+        const profile = await response.json();
+        console.log('refreshUser: user profile fetched:', profile);
+        await AsyncStorage.setItem('userId', profile._id);
+        setUser(profile);
+      } else {
+        console.log('refreshUser: invalid token, removing token and clearing user');
+        setUser(null);
+        await AsyncStorage.removeItem('token');
+        await AsyncStorage.removeItem('userId');
+      }
+    } catch (error) {
+      console.error('Failed to load or validate user', error);
       setUser(null);
+    } finally {
       setLoading(false);
-      return;
     }
-    const response = await fetch(`http://100.117.101.70:3001/users/appValidation`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    console.log('refreshUser: appValidation response status:', response.status);
-
-    if (response.ok) {
-      const profile = await response.json();
-      console.log('refreshUser: user profile fetched:', profile);
-      await AsyncStorage.setItem('userId', profile._id);
-      setUser(profile);
-    } else {
-      console.log('refreshUser: invalid token, removing token and clearing user');
-      setUser(null);
-      await AsyncStorage.removeItem('token');
-      await AsyncStorage.removeItem('userId');
-    }
-  } catch (error) {
-    console.error('Failed to load or validate user', error);
-    setUser(null);
-  } finally {
-    setLoading(false);
-  }
-};
-
+  };
 
   useEffect(() => {
     refreshUser();
@@ -67,7 +66,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       AsyncStorage.removeItem('token').catch(console.error);
     }
   }, [user, loading]);
-
 
   return (
     <UserContext.Provider value={{ user, setUser, loading, refreshUser }}>

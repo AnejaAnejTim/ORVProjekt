@@ -9,17 +9,24 @@ import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { UserContext } from '../userContext';
 
 export default function ProfileScreen() {
-  const { user, setUser, refreshUser } = useContext(UserContext);
+  const context = useContext(UserContext);
   const router = useRouter();
+
+  if (!context) {
+    return null;
+  }
+
+  const { user, setUser, refreshUser } = context;
+
   const handleLogout = async () => {
     await AsyncStorage.removeItem('token');
+    await AsyncStorage.removeItem('userId');
     setUser(null);
-    await refreshUser();
-    router.replace('../login');
+    router.replace('/login');
   };
 
   const handleLoginApproval = () => {
-    router.push('../faceAuth');
+    router.push('/faceAuth');
   };
 
   return (

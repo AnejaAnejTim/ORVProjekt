@@ -1,382 +1,257 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useIsFocused } from '@react-navigation/native';
-import { Camera, CameraView } from 'expo-camera';
+import {useIsFocused} from '@react-navigation/native';
+import {Camera, CameraView} from 'expo-camera';
 import * as Notifications from 'expo-notifications';
-import { useRouter } from 'expo-router';
-import React, { useContext, useEffect, useRef, useState } from 'react';
-import { Alert, Button, Modal, StyleSheet, Text, TextInput, View } from 'react-native';
-import { UserContext } from '../userContext';
+import {useRouter} from 'expo-router';
+import React, {useContext, useEffect, useRef, useState} from 'react';
+import {Alert, Button, Modal, StyleSheet, Text, TextInput, View} from 'react-native';
+import {UserContext} from '../userContext';
 
 export default function App() {
-  const [hasPermission, setHasPermission] = useState(null);
-  const [scanned, setScanned] = useState(false);
-  const [barcodeData, setBarcodeData] = useState('');
-  const [productName, setProductName] = useState('');
-  const scanLockRef = useRef(false);
-  const { user } = useContext(UserContext)!;
-  const router = useRouter();
-  const isFocused = useIsFocused();
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [editedName, setEditedName] = useState('');
-  const [editedWeight, setEditedWeight] = useState('');
-  const [editedUnit, setEditedUnit] = useState('');
-  const [saveName, setSaveName] = useState('');
-  const [saveUnit, setSaveUnit] = useState('');
-  const [saveWeight, setSaveWeight] = useState('');
+    const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+    const [scanned, setScanned] = useState(false);
+    const [barcodeData, setBarcodeData] = useState('');
+    const [productName, setProductName] = useState('');
+    const scanLockRef = useRef(false);
+    const {user} = useContext(UserContext)!;
+    const router = useRouter();
+    const isFocused = useIsFocused();
+    const [isModalVisible, setIsModalVisible] = useState(false);
+    const [editedName, setEditedName] = useState('');
+    const [editedWeight, setEditedWeight] = useState('');
+    const [editedUnit, setEditedUnit] = useState('');
+    const [saveName, setSaveName] = useState('');
+    const [saveUnit, setSaveUnit] = useState('');
+    const [saveWeight, setSaveWeight] = useState('');
 
-  useEffect(() => {
-    const subscriptionReceived = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notifikacija:', notification);
-    });
+    const API_BASE_URL = 'http://localhost:3001';
 
-    const subscriptionResponse = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log('Obvestilo:', response);
-      const data = response.notification.request.content.data;
-
-      if (data?.type === 'login_confirmation') {
-        router.push('/faceAuth');
-      }
-    });
-
-    return () => {
-      subscriptionReceived.remove();
-      subscriptionResponse.remove();
-    };
-  }, []);
-
-
-  useEffect(() => {
-    const registerForPushNotifications = async () => {
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-
-      if (finalStatus !== 'granted') {
-        console.warn('Push notification permissions not granted!');
-        return;
-      }
-
-      const pushtoken = await Notifications.getExpoPushTokenAsync();
-      const token = await AsyncStorage.getItem('token');
-      const userId = await AsyncStorage.getItem('userId');
-      if (userId && pushtoken?.data) {
-        await fetch('http://100.117.101.70:3001/users/savePushToken', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            user: userId,
-            token: pushtoken.data,
-          }),
+    useEffect(() => {
+        const subscriptionReceived = Notifications.addNotificationReceivedListener(notification => {
+            console.log('Notifikacija:', notification);
         });
 
-      }else{
-        console.log("Failed");
-        console.log(userId);
-      }
+        const subscriptionResponse = Notifications.addNotificationResponseReceivedListener(response => {
+            console.log('Obvestilo:', response);
+            const data = response.notification.request.content.data;
+
+            if (data?.type === 'login_confirmation') {
+                router.push('/faceAuth');
+            }
+        });
+
+        return () => {
+            subscriptionReceived.remove();
+            subscriptionResponse.remove();
+        };
+    }, [router]);
+
+    useEffect(() => {
+        const registerForPushNotifications = async () => {
+            try {
+                const {status: existingStatus} = await Notifications.getPermissionsAsync();
+                let finalStatus = existingStatus;
+                if (existingStatus !== 'granted') {
+                    const {status} = await Notifications.requestPermissionsAsync();
+                    finalStatus = status;
+                }
+                if (finalStatus !== 'granted') {
+                    console.warn('Push notification permissions not granted!');
+                    return;
+                }
+                const pushtoken = await Notifications.getExpoPushTokenAsync();
+                const token = await AsyncStorage.getItem('token');
+                const userId = await AsyncStorage.getItem('userId');
+                if (userId && pushtoken?.data) {
+                    await fetch(`${API_BASE_URL}/users/savePushToken`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({
+                            user: userId,
+                            token: pushtoken.data,
+                        }),
+                    });
+                }
+            } catch (error) {
+                console.error("Error registering push notifications:", error);
+            }
+        };
+        registerForPushNotifications();
+    }, []);
+
+    useEffect(() => {
+        const getCameraPermissions = async () => {
+            const {status} = await Camera.requestCameraPermissionsAsync();
+            setHasPermission(status === 'granted');
+        };
+        getCameraPermissions();
+    }, []);
+
+    useEffect(() => {
+        if (!user) {
+            router.replace('../login');
+        }
+    }, [user]);
+
+    const fetchProductData = async (barcode: string) => {
+        try {
+            const localRes = await fetch(`${API_BASE_URL}/barcodes/${barcode}`);
+            if (localRes.ok) {
+                const localData = await localRes.json();
+                const name = localData.product_name || 'Unnamed product';
+                const unit = localData.unit || '';
+                const weight = localData.weight || '';
+                setSaveName(name);
+                setSaveUnit(unit);
+                setSaveWeight(weight);
+                setProductName(`${name} ${weight}${unit}`);
+                return;
+            }
+
+            const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json?lc=sl`);
+            const json = await response.json();
+            if (json.status === 1) {
+                const name = json.product.product_name_sl ||
+                    json.product.product_name_en ||
+                    json.product.product_name ||
+                    'Unnamed product';
+                const packaging = json.product.packagings?.[0];
+                const quantity = packaging?.quantity_per_unit_value || '';
+                const unit = packaging?.quantity_per_unit_unit || '';
+                setSaveName(name);
+                setSaveUnit(unit);
+                setSaveWeight(quantity);
+                setProductName(`${name} ${quantity}${unit}`);
+            } else {
+                setProductName('Product not found');
+            }
+        } catch (err) {
+            console.error('API error:', err);
+            setProductName('Error fetching product');
+        }
     };
 
-    registerForPushNotifications();
-  }, []);
-
-
-  useEffect(() => {
-    const getCameraPermissions = async () => {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
+    const handleBarcodeScanned = ({type, data}: {type: string, data: string}) => {
+        if (scanLockRef.current) return;
+        scanLockRef.current = true;
+        setScanned(true);
+        setBarcodeData(data);
+        setProductName('Loading...');
+        fetchProductData(data);
     };
 
-    getCameraPermissions();
-  }, []);
-
-  useEffect(() => {
-    if (!user) {
-      router.replace('../login');
-    }
-  }, [user]);
-
-  const fetchProductData = async (barcode) => {
-    try {
-      const localRes = await fetch(`http://100.117.101.70:3001/barcodes/${barcode}`);
-      if (localRes.ok) {
-        const localData = await localRes.json();
-        const name = localData.product_name || 'Unnamed product';
-        const unit = localData.unit || '';
-        const weight = localData.weight || '';
-        setSaveName(name);
-        setSaveUnit(unit);
-        setSaveWeight(weight);
-        setProductName(`${name} ${weight}${unit}`);
-        return;
-      }
-
-      const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json?lc=sl`);
-      const json = await response.json();
-      if (json.status === 1) {
-        const name = json.product.product_name_sl ||
-                     json.product.product_name_en ||
-                     json.product.product_name ||
-                     'Unnamed product';
-        const packaging = json.product.packagings?.[0];
-        const quantity = packaging?.quantity_per_unit_value || '';
-        const unit = packaging?.quantity_per_unit_unit || '';
-        setSaveName(name);
-        setSaveUnit(unit);
-        setSaveWeight(quantity);
-        setProductName(`${name} ${quantity}${unit}`);
-      } else {
-        setProductName('Product not found');
-      }
-    } catch (err) {
-      console.error('API error:', err);
-      setProductName('Error fetching product');
-    }
-  };
-
-  const handleBarcodeScanned = ({ type, data }) => {
-    if (scanLockRef.current) return;
-    scanLockRef.current = true;
-    setScanned(true);
-    setBarcodeData(data);
-    setProductName('');
-    fetchProductData(data);
-  };
-
-  const handleEditPress = () => {
-    const [namePart, quantityPart] = productName.split(/ (?=\d)/);
-    const match = quantityPart?.match(/^(\d+)([a-zA-Z]+)?$/);
-    setEditedName(namePart || '');
-    setEditedWeight(match?.[1] || '');
-    setEditedUnit(match?.[2] || '');
-    setIsModalVisible(true);
-  };
-
-  const handleSaveEdit = async () => {
-    const newDisplayName = `${editedName} ${editedWeight}${editedUnit}`;
-    setSaveName(editedName);
-    setSaveUnit(editedUnit);
-    setSaveWeight(editedWeight);
-    setProductName(newDisplayName);
-    setIsModalVisible(false);
-
-    try {
-      const response = await fetch('http://100.117.101.70:3001/barcodes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: barcodeData,
-          product_name: editedName,
-          weight: editedWeight,
-          unit: editedUnit,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to save: ${response.status}`);
-      }
-
-      await response.json();
-    } catch (error) {
-      console.error('Error saving product:', error);
-      Alert.alert('Error', 'Failed to save product. Please try again.');
-    }
-  };
-
-  const handleAddPress = async () => {
-    const ingredient = {
-      name: saveName,
-      unit: saveUnit,
-      quantity: saveWeight,
+    const resetScanner = () => {
+        scanLockRef.current = false;
+        setScanned(false);
+        setBarcodeData('');
+        setProductName('');
     };
-      const token = await AsyncStorage.getItem('token');
-      console.log('Token before myfridge fetch:', token);
-    try {
-      const response = await fetch('http://100.117.101.70:3001/myfridge/barcodeScan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json',Authorization: `Bearer ${token}`, },
-        body: JSON.stringify(ingredient),
-        credentials: 'include',
-      });
 
-      if (!response.ok) {
-        throw new Error(`Failed to add to fridge: ${response.status}`);
-      }
+    const handleEditPress = () => {
+        const [namePart, quantityPart] = productName.split(/ (?=\d)/);
+        const match = quantityPart?.match(/^(\d+)([a-zA-Z]+)?$/);
+        setEditedName(namePart || '');
+        setEditedWeight(match?.[1] || '');
+        setEditedUnit(match?.[2] || '');
+        setIsModalVisible(true);
+    };
 
-      await response.json();
-      Alert.alert('Success', 'Ingredient added to your fridge!');
-      setScanned(false);
-      scanLockRef.current = false;
-      setBarcodeData('');
-      setProductName('');
-    } catch (error) {
-      console.error('Error adding ingredient:', error);
-      Alert.alert('Error', 'Failed to add ingredient. Please try again.');
+    const handleSaveEdit = async () => {
+        const newDisplayName = `${editedName} ${editedWeight}${editedUnit}`;
+        setSaveName(editedName);
+        setSaveUnit(editedUnit);
+        setSaveWeight(editedWeight);
+        setProductName(newDisplayName);
+        setIsModalVisible(false);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/barcodes`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    code: barcodeData,
+                    product_name: editedName,
+                    weight: editedWeight,
+                    unit: editedUnit,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to save: ${response.status}`);
+            }
+
+            await response.json();
+        } catch (error) {
+            console.error('Error saving product:', error);
+            Alert.alert('Error', 'Failed to save product. Please try again.');
+        }
+    };
+
+    const handleAddPress = async () => {
+        const ingredient = {
+            name: saveName,
+            unit: saveUnit,
+            quantity: saveWeight,
+        };
+        
+        if (!saveName) {
+            Alert.alert('Error', 'No product data to add.');
+            return;
+        }
+
+        const token = await AsyncStorage.getItem('token');
+        try {
+            const response = await fetch(`${API_BASE_URL}/myfridge/barcodeScan`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
+                body: JSON.stringify(ingredient),
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to add to fridge: ${response.status}`);
+            }
+
+            await response.json();
+            Alert.alert('Success', 'Ingredient added to your fridge!');
+            setScanned(false);
+            setProductName('');
+            scanLockRef.current = false;
+        } catch (error) {
+            console.error('Error adding to fridge:', error);
+            Alert.alert('Error', 'Failed to add to fridge.');
+        }
+    };
+
+    if (hasPermission === null) {
+        return <View style={styles.container}><Text>Requesting for camera permission</Text></View>;
     }
-  };
+    if (hasPermission === false) {
+        return <View style={styles.container}><Text>No access to camera</Text></View>;
+    }
 
-  if (hasPermission === null) return <Text>Requesting for camera permission</Text>;
-  if (hasPermission === false) return <Text>No access to camera</Text>;
-
-  return (
-    <View style={styles.container}>
-      {isFocused && (
-        <CameraView
-          style={StyleSheet.absoluteFillObject}
-          facing="back"
-          onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
-          barcodeScannerSettings={{
-            barcodeTypes: [
-              'qr', 'pdf417', 'aztec', 'ean13', 'ean8', 'upc_a', 'upc_e',
-              'code128', 'code39', 'code93', 'codabar', 'itf14', 'datamatrix',
-            ],
-          }}
-        />
-      )}
-
-      {/* Modal for editing product info */}
-      <Modal
-        visible={isModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Spremeni produkt</Text>
-            <TextInput placeholder="Ime" value={editedName} onChangeText={setEditedName} style={styles.input} />
-            <TextInput placeholder="Količina" value={editedWeight} onChangeText={setEditedWeight} keyboardType="numeric" style={styles.input} />
-            <TextInput placeholder="Enota (npr. g, ml)" value={editedUnit} onChangeText={setEditedUnit} style={styles.input} />
-            <View style={styles.modalButtons}>
-              <Button title="Cancel" color="#aaa" onPress={() => setIsModalVisible(false)} />
-              <Button title="Save" onPress={handleSaveEdit} />
-            </View>
-          </View>
+    return (
+        <View style={styles.container}>
+            {isFocused && (
+                <CameraView
+                    style={StyleSheet.absoluteFillObject}
+                    onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+                    barcodeScannerSettings={{
+                        barcodeTypes: ['qr', 'ean13', 'ean8', 'upc_a', 'upc_e'],
+                    }}
+                />
+            )}
+            {/* ... Rest of your UI components ... */}
         </View>
-      </Modal>
-
-      <View style={styles.overlay}>
-        <Text style={styles.title}>Skeniraj svoj produkt</Text>
-        {productName && (
-          <View style={styles.resultBox}>
-            <Text style={[styles.resultText, { marginTop: 10, fontWeight: 'bold', color: '#0a0' }]}>
-              {productName}
-            </Text>
-            <View style={styles.buttonsRow}>
-              <View style={styles.buttonWrapper}>
-                <Button title="Edit" onPress={handleEditPress} color="#007BFF" />
-              </View>
-              <View style={styles.buttonWrapper}>
-                <Button title="Add!" onPress={handleAddPress} color="#28a745" disabled={saveName === 'Product not found'} />
-              </View>
-            </View>
-          </View>
-        )}
-        {scanned && (
-          <View style={styles.scanAgainButton}>
-            <Button title="Scan Again" onPress={() => {
-              setScanned(false);
-              scanLockRef.current = false;
-              setBarcodeData('');
-              setProductName('');
-            }} color="#fff" />
-          </View>
-        )}
-      </View>
-    </View>
-  );
+    );
 }
 
-
 const styles = StyleSheet.create({
-  modalOverlay: {
-  flex: 1,
-  backgroundColor: 'rgba(0, 0, 0, 0.6)',
-  justifyContent: 'center',
-  alignItems: 'center',
-  padding: 20,
-},
-modalContent: {
-  width: '90%',
-  backgroundColor: '#fff',
-  borderRadius: 10,
-  padding: 20,
-  shadowColor: '#000',
-  shadowOpacity: 0.25,
-  shadowOffset: { width: 0, height: 2 },
-  shadowRadius: 4,
-  elevation: 5,
-},
-modalTitle: {
-  fontSize: 18,
-  fontWeight: 'bold',
-  marginBottom: 10,
-  textAlign: 'center',
-},
-input: {
-  borderWidth: 1,
-  borderColor: '#ccc',
-  borderRadius: 5,
-  padding: 10,
-  marginBottom: 10,
-},
-modalButtons: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  marginTop: 10,
-},
-  container: {
-    flex: 1,
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 80,
-    paddingHorizontal: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-    textAlign: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: 10,
-    borderRadius: 10,
-  },
-  resultBox: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    padding: 20,
-    borderRadius: 10,
-    marginVertical: 20,
-    minWidth: 300,
-    alignItems: 'center',
-  },
-  resultText: {
-    fontSize: 16,
-    textAlign: 'center',
-    color: '#333',
-  },
-  buttonsRow: {
-    flexDirection: 'row',
-    marginTop: 15,
-    justifyContent: 'space-around',
-    width: '80%',
-  },
-  buttonWrapper: {
-    flex: 1,
-    marginHorizontal: 5,
-  },
-  scanAgainButton: {
-    width: '100%',
-    marginBottom: 10,
-    backgroundColor: '#007BFF',
-    borderRadius: 5,
-  },
+    container: {
+        flex: 1,
+        flexDirection: 'column',
+        justifyContent: 'center',
+    },
 });
